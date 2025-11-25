@@ -1,0 +1,12 @@
+{
+  "algorithm": "Hybrid",
+  "best_x": [
+    1.0,
+    1.0,
+    100.0,
+    100.0,
+    1.0
+  ],
+  "best_f": -117.0,
+  "iterations": 3
+}

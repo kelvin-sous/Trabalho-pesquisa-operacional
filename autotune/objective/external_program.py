@@ -1,4 +1,4 @@
-# objective/external_program.py
+# objective/external_program.py - VERSÃO MELHORADA
 import subprocess
 import tkinter as tk
 from tkinter import filedialog
@@ -6,8 +6,8 @@ import re
 from utils.logger import log
 
 program_path = None
-program_signature = []  # lista de tipos de parâmetros detectados
-num_params = 0  # número de parâmetros detectados
+program_signature = []
+num_params = 0
 
 
 def select_program():
@@ -28,196 +28,96 @@ def select_program():
     return program_path
 
 
-def test_program_with_params(params):
+def parse_help_output_advanced(output):
     """
-    Testa o programa com um conjunto de parâmetros.
-    Retorna (sucesso, output, erro).
+    Parser avançado para extrair informações da mensagem de ajuda.
+    
+    Exemplos que detecta:
+    - "programa.exe x1 x2 x3 x4 x5 (valores inteiros de 1 a 100)"
+    - "uso: programa [int] [float] [float]"
+    - "parâmetros: 5 inteiros"
     """
-    global program_path
     
-    if program_path is None:
-        raise ValueError("Programa não selecionado.")
-    
-    try:
-        # Converte todos os parâmetros para string
-        str_params = [str(p) for p in params]
-        cmd = [program_path] + str_params
+    # Padrão 1: "x1 x2 x3 x4 x5" (conta os x's)
+    x_pattern = re.findall(r'\bx\d+\b', output)
+    if x_pattern:
+        num = len(x_pattern)
+        log(f"   ✓ Detectado {num} parâmetros pelo padrão 'x1 x2 x3...'")
         
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=5  # timeout de 5 segundos
-        )
-        
-        output = result.stdout.strip()
-        error = result.stderr.strip()
-        
-        # Verifica se houve erro
-        if result.returncode != 0:
-            return False, output, error
-        
-        # Verifica se a saída parece válida (um número)
-        try:
-            float(output)
-            return True, output, error
-        except ValueError:
-            return False, output, error
-            
-    except subprocess.TimeoutExpired:
-        return False, "", "Timeout"
-    except Exception as e:
-        return False, "", str(e)
-
-
-def detect_num_params_by_testing():
-    """
-    Detecta o número de parâmetros testando o programa com
-    diferentes quantidades de parâmetros.
-    """
-    global program_path
-    
-    log("🔍 Detectando número de parâmetros por tentativa e erro...")
-    
-    # Testa de 1 até 10 parâmetros (ajuste se necessário)
-    for n in range(1, 11):
-        # Testa com valores 0.0 para todos os parâmetros
-        test_params = [0.0] * n
-        
-        success, output, error = test_program_with_params(test_params)
-        
-        if success:
-            log(f"✅ Programa aceita {n} parâmetros")
-            log(f"   Teste com {test_params} → Saída: {output}")
-            return n, True
+        # Verifica o tipo
+        if 'inteiro' in output.lower() or 'integer' in output.lower():
+            types = ['int'] * num
+            log(f"   ✓ Tipo: inteiro (detectado pela palavra 'inteiro')")
+        elif 'float' in output.lower() or 'real' in output.lower():
+            types = ['float'] * num
+            log(f"   ✓ Tipo: float (detectado pela palavra 'float')")
         else:
-            log(f"❌ Teste com {n} parâmetros falhou")
-            if error:
-                log(f"   Erro: {error}")
-    
-    log("⚠️  Não foi possível detectar o número de parâmetros automaticamente")
-    return None, False
-
-
-def detect_param_types(num_params):
-    """
-    Detecta os tipos de cada parâmetro testando com valores diferentes.
-    Retorna uma lista de tipos: ['int', 'float', 'str', ...]
-    """
-    global program_path
-    
-    log(f"🔍 Detectando tipos dos {num_params} parâmetros...")
-    
-    types = []
-    
-    for i in range(num_params):
-        # Testa se aceita inteiros vs floats
-        # Cria parâmetros base (zeros)
-        base_params = [0.0] * num_params
+            types = ['int'] * num  # Assume int como padrão
+            log(f"   ⚠️  Tipo não especificado, assumindo 'int'")
         
-        # Teste 1: com inteiro
-        test_params_int = base_params.copy()
-        test_params_int[i] = 5
-        success_int, output_int, _ = test_program_with_params(test_params_int)
-        
-        # Teste 2: com float
-        test_params_float = base_params.copy()
-        test_params_float[i] = 5.5
-        success_float, output_float, _ = test_program_with_params(test_params_float)
-        
-        # Teste 3: com string (apenas para verificar se rejeita)
-        test_params_str = base_params.copy()
-        test_params_str[i] = "test"
-        success_str, _, _ = test_program_with_params(test_params_str)
-        
-        # Determina o tipo baseado nos testes
-        if success_str:
-            param_type = "str"
-            log(f"   Parâmetro {i+1}: STRING (aceita texto)")
-        elif success_float and not success_int:
-            param_type = "float"
-            log(f"   Parâmetro {i+1}: FLOAT (requer decimais)")
-        elif success_int and success_float:
-            # Se aceita ambos, verifica se há diferença na saída
-            try:
-                val_int = float(output_int)
-                val_float = float(output_float)
-                if abs(val_int - val_float) < 1e-9:
-                    param_type = "int"
-                    log(f"   Parâmetro {i+1}: INT (int e float dão mesmo resultado)")
-                else:
-                    param_type = "float"
-                    log(f"   Parâmetro {i+1}: FLOAT (diferença entre int e float)")
-            except:
-                param_type = "float"
-                log(f"   Parâmetro {i+1}: FLOAT (padrão)")
+        # Tenta detectar limites (1 a 100, etc)
+        bounds_match = re.search(r'(\d+)\s*a\s*(\d+)', output)
+        if bounds_match:
+            min_val = int(bounds_match.group(1))
+            max_val = int(bounds_match.group(2))
+            log(f"   ✓ Limites detectados: {min_val} a {max_val}")
+            bounds = [(min_val, max_val)] * num
         else:
-            # Padrão: float
-            param_type = "float"
-            log(f"   Parâmetro {i+1}: FLOAT (padrão - não determinado)")
+            bounds = None
         
-        types.append(param_type)
+        return {
+            'found': True,
+            'num_params': num,
+            'types': types,
+            'bounds': bounds
+        }
     
-    return types
-
-
-def detect_program_signature_smart():
-    """
-    Versão inteligente que detecta automaticamente:
-    1. Número de parâmetros
-    2. Tipo de cada parâmetro
-    """
-    global program_path, program_signature, num_params
-    
-    if program_path is None:
-        select_program()
-    
-    log("="*60)
-    log("🤖 DETECÇÃO AUTOMÁTICA DE ASSINATURA DO PROGRAMA")
-    log("="*60)
-    
-    # Etapa 1: Tentar ler --help ou documentação
-    log("\n📖 Etapa 1: Tentando obter informações com --help...")
-    help_info = try_get_help_info()
-    
-    if help_info['found']:
-        log(f"✅ Informações encontradas:")
-        log(f"   Parâmetros: {help_info['num_params']}")
-        log(f"   Tipos: {help_info['types']}")
-        num_params = help_info['num_params']
-        program_signature = help_info['types']
-    else:
-        # Etapa 2: Detecção por tentativa e erro
-        log("\n🧪 Etapa 2: Detecção por tentativa e erro...")
-        detected_num, success = detect_num_params_by_testing()
+    # Padrão 2: "[int] [float] [string]"
+    bracket_pattern = re.findall(r'\[(int|float|double|string|str|text)\]', output)
+    if bracket_pattern:
+        types = []
+        for t in bracket_pattern:
+            if t == 'int':
+                types.append('int')
+            elif t in ['float', 'double']:
+                types.append('float')
+            else:
+                types.append('str')
         
-        if not success or detected_num is None:
-            # Fallback: assume 2 floats
-            log("⚠️  Usando configuração padrão: 2 parâmetros float")
-            num_params = 2
-            program_signature = ["float", "float"]
+        log(f"   ✓ Detectado {len(types)} parâmetros pelo padrão [tipo]")
+        return {
+            'found': True,
+            'num_params': len(types),
+            'types': types,
+            'bounds': None
+        }
+    
+    # Padrão 3: "N parâmetros" ou "N argumentos"
+    num_match = re.search(r'(\d+)\s*(?:parâmetros|argumentos|params|args)', output.lower())
+    if num_match:
+        num = int(num_match.group(1))
+        log(f"   ✓ Detectado {num} parâmetros pela descrição")
+        
+        # Tenta detectar tipo
+        if 'inteiro' in output.lower() or 'integer' in output.lower():
+            types = ['int'] * num
+        elif 'float' in output.lower():
+            types = ['float'] * num
         else:
-            num_params = detected_num
-            # Etapa 3: Detectar tipos
-            log(f"\n🔬 Etapa 3: Detectando tipos dos {num_params} parâmetros...")
-            program_signature = detect_param_types(num_params)
+            types = ['float'] * num  # Padrão
+        
+        return {
+            'found': True,
+            'num_params': num,
+            'types': types,
+            'bounds': None
+        }
     
-    log("\n" + "="*60)
-    log("✅ ASSINATURA DETECTADA:")
-    log(f"   Número de parâmetros: {num_params}")
-    log(f"   Tipos: {program_signature}")
-    for i, t in enumerate(program_signature):
-        log(f"      Parâmetro {i+1}: {t}")
-    log("="*60 + "\n")
-    
-    return program_signature, num_params
+    return {'found': False, 'num_params': 0, 'types': [], 'bounds': None}
 
 
 def try_get_help_info():
-    """
-    Tenta extrair informações do programa usando --help, -h, ou sem argumentos.
-    Retorna um dicionário com as informações encontradas.
-    """
+    """Tenta extrair informações usando --help ou similar."""
     global program_path
     
     help_attempts = [
@@ -232,104 +132,208 @@ def try_get_help_info():
         try:
             cmd = [program_path] + args
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
-            output = (result.stdout + result.stderr).lower()
+            output = (result.stdout + result.stderr)
             
             if output:
                 log(f"   Tentativa com {args or '[sem args]'}: {len(output)} caracteres")
+                log(f"   Mensagem: {output[:200]}")  # Mostra parte da mensagem
                 
-                # Tenta parsear a saída
-                parsed = parse_help_output(output)
+                # Usa o parser avançado
+                parsed = parse_help_output_advanced(output)
                 if parsed['found']:
                     return parsed
         except:
             continue
     
-    return {'found': False, 'num_params': 0, 'types': []}
+    return {'found': False, 'num_params': 0, 'types': [], 'bounds': None}
 
 
-def parse_help_output(output):
-    """
-    Tenta extrair número e tipos de parâmetros da saída de ajuda.
-    """
-    # Padrão 1: "uso: programa [int] [float]"
-    pattern1 = re.findall(r'\[(int|float|double|string|str|text)\]', output)
-    if pattern1:
-        types = []
-        for t in pattern1:
-            if t in ['int']:
-                types.append('int')
-            elif t in ['float', 'double']:
-                types.append('float')
-            elif t in ['string', 'str', 'text']:
-                types.append('str')
+def test_program_with_params(params):
+    """Testa o programa com um conjunto de parâmetros."""
+    global program_path
+    
+    if program_path is None:
+        raise ValueError("Programa não selecionado.")
+    
+    try:
+        str_params = [str(p) for p in params]
+        cmd = [program_path] + str_params
         
-        if types:
-            return {'found': True, 'num_params': len(types), 'types': types}
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        output = result.stdout.strip()
+        error = result.stderr.strip()
+        
+        if result.returncode != 0:
+            return False, output, error
+        
+        try:
+            float(output)
+            return True, output, error
+        except ValueError:
+            return False, output, error
+            
+    except subprocess.TimeoutExpired:
+        return False, "", "Timeout"
+    except Exception as e:
+        return False, "", str(e)
+
+
+def detect_num_params_by_testing():
+    """Detecta o número de parâmetros testando o programa."""
+    global program_path
     
-    # Padrão 2: "parâmetros: 2" ou "parameters: 2"
-    pattern2 = re.search(r'(?:parâmetros|parameters|params|args):\s*(\d+)', output)
-    if pattern2:
-        num = int(pattern2.group(1))
-        # Assume float como padrão
-        return {'found': True, 'num_params': num, 'types': ['float'] * num}
+    log("🔍 Detectando número de parâmetros por tentativa e erro...")
     
-    # Padrão 3: conta ocorrências de tipos mencionados
-    int_count = len(re.findall(r'\bint\b', output))
-    float_count = len(re.findall(r'\b(?:float|double)\b', output))
+    for n in range(1, 11):
+        # Para inteiros, testa com valores de 1 a 100
+        test_params = [50] * n  # Valor médio seguro
+        
+        success, output, error = test_program_with_params(test_params)
+        
+        if success:
+            log(f"✅ Programa aceita {n} parâmetros")
+            log(f"   Teste com {test_params} → Saída: {output}")
+            return n, True
+        else:
+            log(f"❌ Teste com {n} parâmetros falhou")
+            if error and len(error) < 100:
+                log(f"   Erro: {error}")
     
-    if int_count > 0 or float_count > 0:
-        types = ['int'] * int_count + ['float'] * float_count
-        if types:
-            return {'found': True, 'num_params': len(types), 'types': types}
+    log("⚠️  Não foi possível detectar o número de parâmetros automaticamente")
+    return None, False
+
+
+def detect_param_types(num_params):
+    """Detecta os tipos de cada parâmetro."""
+    global program_path
     
-    return {'found': False, 'num_params': 0, 'types': []}
+    log(f"🔍 Detectando tipos dos {num_params} parâmetros...")
+    
+    types = []
+    
+    for i in range(num_params):
+        base_params = [50] * num_params  # Valores base seguros
+        
+        # Teste com inteiro
+        test_params_int = base_params.copy()
+        test_params_int[i] = 10
+        success_int, output_int, _ = test_program_with_params(test_params_int)
+        
+        # Teste com float
+        test_params_float = base_params.copy()
+        test_params_float[i] = 10.5
+        success_float, output_float, _ = test_program_with_params(test_params_float)
+        
+        if success_int and not success_float:
+            param_type = "int"
+            log(f"   Parâmetro {i+1}: INT (rejeita decimais)")
+        elif success_float:
+            param_type = "float"
+            log(f"   Parâmetro {i+1}: FLOAT (aceita decimais)")
+        else:
+            param_type = "int"  # Padrão para inteiro
+            log(f"   Parâmetro {i+1}: INT (padrão)")
+        
+        types.append(param_type)
+    
+    return types
+
+
+def detect_program_signature_smart():
+    """Detecção automática inteligente da assinatura do programa."""
+    global program_path, program_signature, num_params
+    
+    if program_path is None:
+        select_program()
+    
+    log("="*60)
+    log("🤖 DETECÇÃO AUTOMÁTICA DE ASSINATURA DO PROGRAMA")
+    log("="*60)
+    
+    # Etapa 1: Tentar ler --help
+    log("\n📖 Etapa 1: Tentando obter informações com --help...")
+    help_info = try_get_help_info()
+    
+    if help_info['found']:
+        log(f"✅ Informações encontradas via --help:")
+        log(f"   Parâmetros: {help_info['num_params']}")
+        log(f"   Tipos: {help_info['types']}")
+        if help_info.get('bounds'):
+            log(f"   Limites: {help_info['bounds']}")
+        
+        num_params = help_info['num_params']
+        program_signature = help_info['types']
+        bounds = help_info.get('bounds')
+    else:
+        # Etapa 2: Detecção por tentativa e erro
+        log("\n🧪 Etapa 2: Detecção por tentativa e erro...")
+        detected_num, success = detect_num_params_by_testing()
+        
+        if not success or detected_num is None:
+            log("⚠️  Usando configuração padrão: 2 parâmetros float")
+            num_params = 2
+            program_signature = ["float", "float"]
+            bounds = None
+        else:
+            num_params = detected_num
+            log(f"\n🔬 Etapa 3: Detectando tipos dos {num_params} parâmetros...")
+            program_signature = detect_param_types(num_params)
+            bounds = None
+    
+    log("\n" + "="*60)
+    log("✅ ASSINATURA DETECTADA:")
+    log(f"   Número de parâmetros: {num_params}")
+    log(f"   Tipos: {program_signature}")
+    for i, t in enumerate(program_signature):
+        log(f"      Parâmetro {i+1}: {t}")
+    log("="*60 + "\n")
+    
+    return program_signature, num_params, bounds
 
 
 def run_external_program(params):
-    """
-    Executa o programa com os parâmetros fornecidos.
-    Valida se a quantidade de parâmetros está correta.
-    """
+    """Executa o programa com os parâmetros fornecidos."""
     global program_path, program_signature, num_params
 
     if program_path is None:
         select_program()
 
-    # Se ainda não detectamos a assinatura, detecta agora
     if not program_signature or num_params == 0:
         detect_program_signature_smart()
 
-    # Validação: verifica se o número de parâmetros está correto
     if len(params) != num_params:
         raise ValueError(
             f"Número incorreto de parâmetros! "
             f"Esperado: {num_params}, Recebido: {len(params)}"
         )
 
-    # Converte cada parâmetro conforme o tipo esperado
+    # Converte parâmetros
     converted = []
     for p, t in zip(params, program_signature):
         if t == "int":
-            converted.append(str(int(p)))
+            converted.append(str(int(round(p))))  # Garante inteiro
         elif t == "float":
             converted.append(f"{float(p):.10f}")
-        else:  # texto ou outro tipo
+        else:
             converted.append(str(p))
 
-    # Monta o comando
     cmd = [program_path] + converted
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         
-        # Verifica se houve erro
         if result.returncode != 0:
             error_msg = result.stderr.strip() or result.stdout.strip()
             raise RuntimeError(f"Programa retornou erro: {error_msg}")
         
         output = result.stdout.strip()
         
-        # Tenta converter para float
         try:
             value = float(output)
             return value
@@ -343,10 +347,7 @@ def run_external_program(params):
 
 
 def get_program_info():
-    """
-    Retorna informações sobre o programa detectado.
-    Útil para debugging e logs.
-    """
+    """Retorna informações sobre o programa detectado."""
     global program_path, program_signature, num_params
     
     return {

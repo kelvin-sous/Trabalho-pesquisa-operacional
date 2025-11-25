@@ -1,0 +1,41 @@
+{
+  "program_path": "C:/Users/aluno/Downloads/simulado (1).exe",
+  "signature": [
+    "int",
+    "int",
+    "int",
+    "int",
+    "int"
+  ],
+  "num_params": 5,
+  "x0": [
+    50.5,
+    50.5,
+    50.5,
+    50.5,
+    50.5
+  ],
+  "bounds": [
+    [
+      1,
+      100
+    ],
+    [
+      1,
+      100
+    ],
+    [
+      1,
+      100
+    ],
+    [
+      1,
+      100
+    ],
+    [
+      1,
+      100
+    ]
+  ],
+  "max_iter": 200
+}

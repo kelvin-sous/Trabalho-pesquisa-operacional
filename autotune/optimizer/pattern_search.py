@@ -33,12 +33,16 @@ class PatternSearch(BaseOptimizer):
         self.history.append({'iteration': 0, 'x': x.copy(), 
                             'f': f_best, 'delta': self.delta})
         
-        log(f"🎯 Iniciando Pattern Search")
-        log(f"   Ponto inicial: {x}")
-        log(f"   f(x0) = {f_best:.6f}")
-        log(f"   Dimensões: {n_dims}")
-        log(f"   Delta inicial: {self.delta}")
-        log("-" * 60)
+        log("="*70)
+        log(f" PATTERN SEARCH - INICIANDO")
+        log("="*70)
+        log(f"    Configuração:")
+        log(f"      • Ponto inicial: {x}")
+        log(f"      • Fitness inicial: f(x0) = {f_best:.6f}")
+        log(f"      • Dimensões: {n_dims}")
+        log(f"      • Delta inicial: {self.delta}")
+        log(f"      • Max iterações: {self.max_iter}")
+        log("="*70)
 
         delta = self.delta
         n_eval = 1  # Contador de avaliações da função objetivo
@@ -61,8 +65,8 @@ class PatternSearch(BaseOptimizer):
                     n_eval += 1
 
                     # Se encontrou melhoria, aceita o novo ponto
-                    if f_new < f_best:
-                        improvement = f_best - f_new
+                    if f_new > f_best:  # MAXIMIZAÇÃO: maior é melhor
+                        improvement = f_new - f_best
                         log(f"✓ Iter {iteration}: Melhoria na dim {i} "
                             f"(direção {direction:+d})")
                         log(f"  x[{i}]: {x[i]:.6f} → {x_new[i]:.6f}")
@@ -98,18 +102,23 @@ class PatternSearch(BaseOptimizer):
 
             # Critério de parada: delta muito pequeno
             if delta < self.delta_min:
-                log(f"🛑 Convergência atingida: delta ({delta:.2e}) < "
+                log(f" Convergência atingida: delta ({delta:.2e}) < "
                     f"delta_min ({self.delta_min:.2e})")
                 break
 
         # Resultados finais
-        log("-" * 60)
-        log(f"✅ Otimização concluída!")
-        log(f"   Iterações: {iteration}/{self.max_iter}")
-        log(f"   Avaliações da função: {n_eval}")
-        log(f"   Solução ótima: {x}")
-        log(f"   Valor ótimo: f(x*) = {f_best:.6f}")
-        log(f"   Delta final: {delta:.2e}")
+        log("="*70)
+        log(f" PATTERN SEARCH - OTIMIZAÇÃO CONCLUÍDA")
+        log("="*70)
+        log(f"    Estatísticas:")
+        log(f"      • Iterações: {iteration}/{self.max_iter}")
+        log(f"      • Avaliações da função: {n_eval}")
+        log(f"      • Delta final: {delta:.2e}")
+        log(f"")
+        log(f"    Melhor Solução Encontrada:")
+        log(f"      • Parâmetros: {x}")
+        log(f"      • Fitness: f(x*) = {f_best:.10f}")
+        log("="*70)
 
         return x, f_best, self.history
 
@@ -133,7 +142,7 @@ class PatternSearchWithPattern(BaseOptimizer):
         f_best = self.objective_function(x)
         delta = self.delta
         
-        log(f"🎯 Iniciando Pattern Search com Movimento de Padrão")
+        log(f" Iniciando Pattern Search com Movimento de Padrão")
         log(f"   Ponto inicial: {x}, f(x0) = {f_best:.6f}")
 
         for iteration in range(1, self.max_iter + 1):
@@ -150,7 +159,7 @@ class PatternSearchWithPattern(BaseOptimizer):
                     x_new[i] += direction * delta
                     f_new = self.objective_function(x_new)
 
-                    if f_new < f_best:
+                    if f_new > f_best:  # MAXIMIZACAO
                         x, f_best = x_new, f_new
                         improved = True
                         break
@@ -162,19 +171,19 @@ class PatternSearchWithPattern(BaseOptimizer):
                 x_pattern = x + self.alpha * pattern
                 f_pattern = self.objective_function(x_pattern)
                 
-                if f_pattern < f_best:
-                    log(f"⚡ Iter {iteration}: Aceleração por padrão! "
+                if f_pattern > f_best:  # MAXIMIZACAO
+                    log(f"Iter {iteration}: Aceleração por padrão! "
                         f"f: {f_best:.6f} → {f_pattern:.6f}")
                     x, f_best = x_pattern, f_pattern
                 else:
-                    log(f"✓ Iter {iteration}: Melhoria simples. f = {f_best:.6f}")
+                    log(f"Iter {iteration}: Melhoria simples. f = {f_best:.6f}")
             else:
                 delta *= 0.5
                 log(f"✗ Iter {iteration}: Reduzindo delta → {delta:.6f}")
 
             if delta < self.tol:
-                log(f"🛑 Convergência atingida")
+                log(f"Convergência atingida")
                 break
 
-        log(f"✅ Solução: {x}, f(x*) = {f_best:.6f}")
+        log(f"Solução: {x}, f(x*) = {f_best:.6f}")
         return x, f_best

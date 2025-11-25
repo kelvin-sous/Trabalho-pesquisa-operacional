@@ -1,0 +1,12 @@
+{
+  "algorithm": "Pattern Search",
+  "best_x": [
+    50.5,
+    51.5,
+    50.5,
+    51.5,
+    51.5
+  ],
+  "best_f": 36.0,
+  "iterations": 24
+}
